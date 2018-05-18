@@ -2,15 +2,18 @@ package com.knoldus.impl;
 
 import akka.NotUsed;
 import com.google.inject.Inject;
-import com.knoldus.api.NotificationService;
-import com.knoldus.api.Rc;
-import com.knoldus.api.User;
-import com.knoldus.api.Vehicle;
+import com.knoldus.api.*;
 import com.lightbend.lagom.javadsl.api.ServiceCall;
 import com.lightbend.lagom.javadsl.persistence.jdbc.JdbcSession;
 import org.pcollections.PSequence;
 import org.pcollections.TreePVector;
 
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.text.ParseException;
@@ -18,6 +21,7 @@ import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 public class NotificationImpl implements NotificationService {
@@ -98,13 +102,14 @@ public class NotificationImpl implements NotificationService {
         };
     }
 
-    /*@Override
-    public ServiceCall<NotUsed, PSequence<Rc>> checkExpiry(String rcNumber) {
+    @Override
+    public ServiceCall<NotUsed, PSequence<EmailAddress>> checkExpiry(String rcNumber) {
         return (response) -> {
             return jdbcSession.withConnection(connection -> {
                 try (PreparedStatement ps = connection.prepareStatement
                         ("SELECT rc_number, date_of_expiry, vid FROM rc where rc_number = '" + rcNumber + "'")) {
                     try (ResultSet rs = ps.executeQuery()) {
+                        PSequence<EmailAddress> rcPSequence1 = TreePVector.empty();
                         PSequence<Rc> rcPSequence = TreePVector.empty();
                         while (rs.next()) {
                             rcPSequence = rcPSequence.plus(
@@ -115,41 +120,54 @@ public class NotificationImpl implements NotificationService {
                             );
                         }
                         if (getDate(rcPSequence.get(0).getDate_of_expiry()) <= 30) {
-                            try (PreparedStatement ps1 = connection.prepareStatement
-                                    ("SELECT rc_number, date_of_expiry, vid FROM rc where rc_number = '" + rcNumber + "'")) {
-                                try (ResultSet rs1 = ps.executeQuery()) {
-                                    PSequence<Rc> rcPSequence1 = TreePVector.empty();
-                                    while (rs.next()) {
-                                        rcPSequence = rcPSequence.plus(
-                                                new Rc(
-                                                        rs.getString("rc_number"),
-                                                        rs.getString("date_of_expiry"),
-                                                        rs.getInt("vid"))
+                            try (PreparedStatement ps1 = connection.prepareStatement("select email from person p where exists(select vid from vehicle v where v.id=p.id AND exists(select rc_number from rc where '" + rcNumber + "' = v.rc_number))")) {
+                                try (ResultSet resultSet = ps1.executeQuery()) {
+                                    while (resultSet.next()) {
+                                        rcPSequence1 = rcPSequence1.plus(new EmailAddress(resultSet.getString("email"))
                                         );
                                     }
+                                    resultSet.close();
                                     return rcPSequence1;
                                 }
                             }
                         }
-                        return rcPSequence;
+                        return rcPSequence1;
                     }
                 }
             });
         };
-    }*/
+    }
 
+    private void sendEmail(String email) {
+        Properties properties = System.getProperties();
+        properties.setProperty("mail.smtp.host", "localhost");
+        Session session = Session.getDefaultInstance(properties);
+
+        //compose the message
+        try {
+            MimeMessage message = new MimeMessage(session);
+            message.setFrom(new InternetAddress("charmygarg07@gmail.com"));
+            message.addRecipient(Message.RecipientType.TO, new InternetAddress(email));
+            message.setSubject("Ping");
+            message.setText("Hello, this is example of sending email  ");
+
+            // Send message
+            Transport.send(message);
+
+        } catch (MessagingException mex) {
+            mex.printStackTrace();
+        }
+    }
 
     private Long getDate(String date) {
-        SimpleDateFormat myFormat = new SimpleDateFormat("dd MM yyyy");
+        SimpleDateFormat myFormat = new SimpleDateFormat("dd-MM-yyyy");
         Long dd = 0l;
         try {
             Date date1 = myFormat.parse(date);
-            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd MM yyyy");
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd-MM-yyyy");
             LocalDateTime now = LocalDateTime.now();
-            System.out.println(dtf.format(now) + "yyyyyyyyyyyyyyyyy");
             Date date2 = myFormat.parse(dtf.format(now));
-            long diff = date2.getTime() - date1.getTime();
-            System.out.println("Days: 0############## " + TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS));
+            long diff = date1.getTime() - date2.getTime();
             dd = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
         } catch (ParseException e) {
             e.printStackTrace();

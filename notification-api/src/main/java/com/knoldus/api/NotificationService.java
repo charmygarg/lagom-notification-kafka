@@ -15,6 +15,7 @@ public interface NotificationService extends Service {
     ServiceCall<NotUsed, PSequence<User>> getUser(String uid);
     ServiceCall<NotUsed, PSequence<Vehicle>> getVehicle(String vid);
     ServiceCall<NotUsed, PSequence<Rc>> getRc(String rcNumber);
+    ServiceCall<NotUsed, PSequence<EmailAddress>> checkExpiry(String rcNumber);
 
     @Override
     default Descriptor descriptor() {
@@ -22,7 +23,8 @@ public interface NotificationService extends Service {
                 .withCalls(
                         restCall(GET, "/api/user/:uid", this::getUser),
                         restCall(GET, "/api/vehicle/:vid", this::getVehicle),
-                        restCall(GET, "/api/rc/:rcNumber", this::getRc)
+                        restCall(GET, "/api/rc/:rcNumber", this::getRc),
+                        restCall(GET, "/api/check/:rcNumber", this::checkExpiry)
                         )
                 .withAutoAcl(true);
         return descriptor;
